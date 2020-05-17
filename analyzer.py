@@ -32,6 +32,8 @@ def replay_dir():
 
     # TODO are the two folder names i'm searching for meaningful?
     # should i save them as other variables?
+    # (maybe for auto assigning the player, if other people wanna use this and
+    # thus my hardcoded `my_name='TheTossBoss'` wouldn't help them...)
 
     # (no attempt to support multiple accounts now)
     account_dirs = glob.glob(join(replay_dir, '*/'))
@@ -89,27 +91,38 @@ highest_league_num2str = {
 free_units = {
     'broodling',
     'locust',
-    'interceptor'
+    'interceptor',
+    'autoturret',
+    'infestedterran'
 }
-# TODO deal w/ units modes, as seems necessary
-# (warpprismphasing and maybe something similar for siege?)
+# TODO am i missing archon merges somehow?
+# TODO need to deal w/ neural parasite changing ownership?
+# TODO TODO TODO do the .units lists include events about the units dying and
+# stuff (basically, are there any circumstances where units are double counted?)
+# eliminate all double counting! (what about the units moving? that counted?)
+# TODO TODO see sc2reader docs or make my own test cases, checking that the
+# total number of units *created* is at least correct
 _real_army_units_seen = set()
 def real_army_units(units):
     rau = [u for u in units if u.is_army and not u.hallucinated
         and u.title != 'Overlord' and u.title.lower() not in free_units
+        and not u.title.endswith('Burrowed') and not u.title.endswith('Cocoon')
+        and u.title != 'SiegeTankSieged' and u.title != 'WarpPrismPhasing'
+        and u.title != 'VikingAssault' and u.title != 'BattleHellion'
     ]
     for u in rau:
-        _real_army_units_seen.add(u)
+        _real_army_units_seen.add(u.title)
     return rau
 
 
 unit2abbreviation = {
+    'battlehellion': 'hellbat',
     # TODO test these keys are all correct and not missing spaces or something
     'darktemplar': 'DT',
     'zergling': 'ling',
     'mutalisk': 'muta',
     'immortal': 'immo',
-    'warpprism': 'prism'
+    'warpprism': 'prism',
 }
 def abbreviate_unit(unit):
     unit = unit.lower()
@@ -119,24 +132,32 @@ def abbreviate_unit(unit):
         return unit
 
 
+# TODO maybe count just what exists when the game ends?
+# (might help to quickly see what they beat you with, unless units sitting
+# at home add noise...)
 def count_army_units(army_units):
     # Throwing away the time information, etc.
-    army_units = [abbreviate_unit(u.title) for u in army_units]
-    return Counter(army_units)
+    army_unit_abbrevs = [abbreviate_unit(u.title) for u in army_units]
+
+    abbrev2representative_unit = dict()
+    for abbrev, unit in zip(army_unit_abbrevs[::-1], army_units[::-1]):
+        abbrev2representative_unit[abbrev] = unit
+
+    return Counter(army_unit_abbrevs), abbrev2representative_unit
 
 
 def most_common_army_unit(army_units):
     if len(army_units) == 0:
         return None
-    counter = count_army_units(army_units)
+    counter, _ = count_army_units(army_units)
     return counter.most_common(1)[0][0]
 
 
 # TODO maybe include upgrades in something like this / in another str
-def army_summary_str(army_units, scale_by='num_units', n=3):
+def army_summary_str(army_units, scale_by='supply', n=3):
     if len(army_units) == 0:
         return None
-    counter = count_army_units(army_units)
+    counter, abbrev2representative_unit = count_army_units(army_units)
 
     unit_names = []
     counts = []
@@ -147,12 +168,20 @@ def army_summary_str(army_units, scale_by='num_units', n=3):
         unit_name2idx[u] = i
     counts = np.array(counts)
 
-    if scale_by == 'num_units':
-        percentages = counts / np.sum(counts)
-    # TODO TODO TODO weight by supply!
-    # TODO maybe also consider weighting by or resources?
+    if scale_by == 'number':
+        numerators = counts
+
+    elif scale_by == 'supply':
+        supplies = np.array([
+            abbrev2representative_unit[a].supply for a in unit_names
+        ])
+        numerators = counts * supplies
+
+    # TODO maybe also consider weighting by resource costs?
     else:
         raise NotImplementedError(f'scale_by={scale_by} not supported')
+
+    fractions = numerators / np.sum(numerators)
 
     # TODO maybe some elbow finding method to pick n highest to use?
 
@@ -160,7 +189,7 @@ def army_summary_str(army_units, scale_by='num_units', n=3):
     remaining = 1.0
     for u, _ in counter.most_common(n):
         i = unit_name2idx[u]
-        p = percentages[i]
+        p = fractions[i]
         remaining -= p
         summary_str_parts.append(f'{p:.0%} {u}')
 
@@ -301,7 +330,7 @@ def load_1v1_ranked(paths, my_name, analyze_units=True):
         n_competitive += 1
 
         # TODO why is this always None? what is this for?
-        # TODO check if when fully loaded
+        # TODO check it when fully loaded
         assert replay.ranked is None
 
         assert replay.players[0].name != replay.players[1].name
@@ -487,8 +516,8 @@ def main():
 
     frac_familiar = game_fraction_familiar_opponent(df)
 
-    print('"real" army units seen:')
-    pprint(_real_army_units_seen)
+    #print('"real" army units seen:')
+    #pprint(_real_army_units_seen)
     import ipdb; ipdb.set_trace()
 
 
