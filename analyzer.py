@@ -460,12 +460,10 @@ def game_fraction_familiar_opponent(df):
     frac_familiar_series = \
         played_opponent_before.cumsum() / (np.arange(len(df)) + 1)
 
-    # TODO maybe inspect final element too
-
-    # TODO does matplotlib work in WSL? seems like it might not...
-    # TODO TODO TODO fix plotting
-    #plt.plot(frac_familiar_series)
-    #plt.show()
+    fig, ax = plt.subplots()
+    plt.plot(frac_familiar_series)
+    ax.set_title('Fraction of games against familiar opponents')
+    plt.show()
 
     # TODO varying lookbehind windows? (i initially described a lookbehind
     # window that extends back to time 0=first replay, but maybe try some that
