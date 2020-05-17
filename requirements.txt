@@ -1,0 +1,14 @@
+
+# This seems to fix the "error: invalid command 'bdist_wheel'"
+# in pip install of just the next two....
+# (w/ the python3.6 I happen to be using in my Ubuntu 18.04 WSL distribution)
+wheel
+
+sc2reader
+pandas
+tqdm
+matplotlib
+
+# if this is useful enough for its analysis / build order functions
+#spawningtool
+
